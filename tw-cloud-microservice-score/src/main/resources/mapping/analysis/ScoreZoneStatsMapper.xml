@@ -1,0 +1,181 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!--
+
+       Copyright 2015-2016 the original author or authors.
+
+       Licensed under the Apache License, Version 2.0 (the "License");
+       you may not use this file except in compliance with the License.
+       You may obtain a copy of the License at
+
+          http://www.apache.org/licenses/LICENSE-2.0
+
+       Unless required by applicable law or agreed to in writing, software
+       distributed under the License is distributed on an "AS IS" BASIS,
+       WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+       See the License for the specific language governing permissions and
+       limitations under the License.
+
+-->
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.tianwen.springcloud.microservice.score.dao.analysis.ScoreZoneStatsMapper">
+
+    <sql id="listData">
+        WITH stu_score_data_base AS (
+            SELECT
+                pt.gradeid, classid, stuid, stuname,
+                text2score(pt.score) AS score,
+                MAX (text2score(pt.score)) OVER (PARTITION BY classid) max_score,
+                MIN (text2score(pt.score)) OVER (PARTITION BY classid) min_score
+            FROM t_e_cj_stu_subject_score pt
+            INNER JOIN t_e_cj_exam exam USING (examid)
+            <include refid="BaseMapper.joinExamGrade" />
+            <where>
+                true
+                <include refid="BaseMapper.sqlFragment_searchCriteria" />
+                <if test="filter.subjectId != null and !filter.subjectId.isEmpty() and !filter.subjectId.equals('TOTAL')">
+                    AND subjectid=#{filter.subjectId}
+                </if>
+                <if test="filter.subjectIdList != null and !filter.subjectIdList.isEmpty()">
+                    AND subjectid IN
+                    <foreach collection="filter.subjectIdList" item="subjectId" open="(" close=")" separator=",">
+                        #{subjectId}
+                    </foreach>
+                </if>
+                <include refid="BaseMapper.filterClass" />
+            </where>
+        ),
+         stu_score_data AS (
+            SELECT
+                gradeid, classid, stuid, stuname,
+                round(AVG(score), 2) avg_score,
+                SUM (score) score,
+                SUM (max_score) max_score,
+                SUM (min_score) min_score
+            FROM
+                stu_score_data_base
+            GROUP BY
+                gradeid, classid, stuid, stuname
+        ),
+         stu_score_rank_data AS (
+            SELECT
+                <include refid="score_zone_count_filter"/>
+                #{filter.subjectId} subjectid,
+                classid, stuid, stuname,
+                COUNT (*) OVER (PARTITION BY gradeid, classid) stu_exam_count,
+                RANK () OVER ( PARTITION BY gradeid, classid ORDER BY (score) DESC ) AS rank_in_class,
+                RANK () OVER ( PARTITION BY gradeid ORDER BY (score) DESC ) AS rank_in_grade,
+                score, max_score, min_score, avg_score,
+                round(SQRT (variance(score) OVER (PARTITION BY classid)),2) diff
+            FROM
+                stu_score_data
+        ),
+        stu_total_score_data_for_total AS (
+            select
+            <foreach collection="filter.levelZoneConfigList" item="levelZoneConfig">
+                round(avg(count${levelZoneConfig.lowscore}), 0) count${levelZoneConfig.lowscore},
+                round(avg(accum_count${levelZoneConfig.highscore}), 0) accum_count${levelZoneConfig.highscore},
+            </foreach>
+            classid, round(avg(score)) score, max(max_score) max_score, min(min_score) min_score,
+            round(avg(stu_exam_count), 0) stu_exam_count, avg(avg_score) avg_score, avg(diff) diff
+            from stu_score_rank_data
+            group by classid
+        ),
+         stu_total_score_rank_data AS (
+            SELECT
+                <foreach collection="filter.levelZoneConfigList" item="levelZoneConfig">
+                    sum(count${levelZoneConfig.lowscore}) count${levelZoneConfig.lowscore},
+                    sum(accum_count${levelZoneConfig.highscore}) accum_count${levelZoneConfig.highscore},
+                </foreach>
+                #{filter.subjectId} subjectid,
+                'TOTAL' classid,
+                '' stuid,
+                '' stuname,
+                sum (stu_exam_count) stu_exam_count,
+                -1 rank_in_class,
+                -1 rank_in_grade,
+                SUM (score) score,
+                MAX (max_score) max_score,
+                MIN (min_score) min_score,
+                round(AVG(avg_score), 2) avg_score,
+                round(AVG(diff), 2) diff
+            FROM
+                stu_total_score_data_for_total
+        ),
+        score_stats_data AS (
+            SELECT
+                *
+            FROM
+                stu_score_rank_data
+            UNION
+                SELECT
+                    *
+                FROM
+                    stu_total_score_rank_data
+        )
+    </sql>
+
+    <sql id="score_zone_count_filter">
+        <foreach collection="filter.levelZoneConfigList" item="levelZoneConfig">
+            sum(
+            CASE WHEN (
+            <if test="levelZoneConfig.highScore != null and levelZoneConfig.highScore != '' and levelZoneConfig.highScore != 0">
+                text2numeric(#{levelZoneConfig.highScore})
+                <if test="filter.levelZoneConfigList.indexOf(levelZoneConfig)==0">
+                  >=
+                </if>
+                <if test="filter.levelZoneConfigList.indexOf(levelZoneConfig)!=0">
+                  >
+                </if>
+                score AND
+            </if>
+            score >= text2numeric(#{levelZoneConfig.lowScore})
+            ) THEN 1 ELSE 0 END
+            ) OVER (PARTITION BY classid) count${levelZoneConfig.lowscore},
+            sum(
+            CASE WHEN (
+            score >= text2numeric(#{levelZoneConfig.lowScore})
+            ) THEN 1 ELSE 0
+            END
+            ) OVER (PARTITION BY classid) accum_count${levelZoneConfig.highscore},
+        </foreach>
+    </sql>
+
+    <sql id="listFilter">
+        <where>
+            true
+            <include refid="BaseMapper.filterClass" />
+        </where>
+    </sql>
+
+    <select id="selectList" parameterType="com.tianwen.springcloud.microservice.score.entity.request.Request"
+            resultType="java.util.Map">
+        <include refid="listData" />
+        SELECT
+        <foreach collection="filter.levelZoneConfigList" item="levelZoneConfig">
+            count${levelZoneConfig.lowscore}, accum_count${levelZoneConfig.highscore},
+        </foreach>
+        classid class_id,
+        stuid student_id,
+        stuname student_name,
+        rank_in_class,
+        rank_in_grade,
+        stu_exam_count count,
+        score,
+        max_score,
+        min_score,
+        avg_score,
+        diff
+        FROM score_stats_data
+        ORDER BY rank_in_grade, classid, rank_in_class
+        <include refid="BaseMapper.sqlFragment_pagination" />
+    </select>
+
+    <select id="countList" parameterType="com.tianwen.springcloud.microservice.score.entity.request.Request"
+            resultType="Integer">
+        <include refid="listData" />
+        SELECT COUNT(*) FROM score_stats_data
+    </select>
+
+</mapper>

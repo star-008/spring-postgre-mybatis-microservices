@@ -1,0 +1,131 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!--
+
+       Copyright 2015-2016 the original author or authors.
+
+       Licensed under the Apache License, Version 2.0 (the "License");
+       you may not use this file except in compliance with the License.
+       You may obtain a copy of the License at
+
+          http://www.apache.org/licenses/LICENSE-2.0
+
+       Unless required by applicable law or agreed to in writing, software
+       distributed under the License is distributed on an "AS IS" BASIS,
+       WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+       See the License for the specific language governing permissions and
+       limitations under the License.
+
+-->
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.tianwen.springcloud.microservice.score.dao.ExamSubjectScoreMapper">
+
+    <sql id="table">t_e_cj_exam_subject_score</sql>
+
+    <select id="getGradeIdList" parameterType="java.util.Map"
+            resultType="java.lang.String">
+        SELECT DISTINCT pt.gradeid
+        FROM <include refid="table" /> pt
+        <include refid="BaseMapper.joinExam" />
+        <include refid="BaseMapper.joinExamGrade" />
+        <where>
+            true
+            <include refid="BaseMapper.sqlFragment_searchCriteria" />
+        </where>
+        ORDER BY pt.gradeid
+    </select>
+
+    <select id="getSubjectIdList" parameterType="java.util.Map"
+            resultType="java.lang.String">
+        SELECT DISTINCT pt.subjectid
+        FROM <include refid="table" /> pt
+        <include refid="BaseMapper.joinExam" />
+        <include refid="BaseMapper.joinExamGrade" />
+        <if test="filter.classId != null and !filter.classId.isEmpty() and (filter.classType != null and filter.classType == 2)">
+            INNER JOIN <include refid="com.tianwen.springcloud.microservice.score.dao.ExamClassMapper.table" /> ec ON pt.examid=ec.examid AND pt.subjectid=ec.subjectid AND ec.classid=#{filter.classId}
+        </if>
+        <where>
+            true
+            <include refid="BaseMapper.sqlFragment_searchCriteria" />
+            <include refid="BaseMapper.filterClassType" />
+        </where>
+        ORDER BY pt.subjectid
+    </select>
+
+    <resultMap id="ExamSubjectScore" type="com.tianwen.springcloud.microservice.score.entity.ExamSubjectScore">
+        <result column="examsubjectscoreid" property="id" />
+        <result column="examid" property="examId" />
+        <result column="gradeid" property="gradeId" />
+        <result column="subjectid" property="subjectId" />
+        <result column="classtype" property="classType" />
+        <result column="rules" property="rules" />
+        <result column="score" property="score" />
+        <result column="managerid" property="managerId" />
+        <result column="managername" property="managerName" />
+        <result column="submittime" property="submitTime" />
+        <result column="volumes" property="volumes" />
+        <result column="questioncount" property="questionCount" />
+        <result column="status" property="status" />
+
+        <result column="publisherid" property="publisherId" />
+        <result column="publishername" property="publisherName" />
+        <result column="pubtime" property="pubTime" />
+        <result column="pubstatus" property="pubStatus" />
+
+        <result column="score_entered_count" property="scoreEnteredCount" />
+        <result column="score_unentered_count" property="scoreUnenteredCount" />
+        <result column="exam_missed_count" property="examMissedCount" />
+
+        <association property="exam" resultMap="com.tianwen.springcloud.microservice.score.dao.ExamMapper.JoinedExam" />
+    </resultMap>
+
+    <sql id="listFilter">
+        FROM <include refid="table" /> pt
+        INNER JOIN <include refid="com.tianwen.springcloud.microservice.score.dao.ExamMapper.table" /> exam on exam.examid=pt.examid
+        <where>
+            true
+            <include refid="BaseMapper.sqlFragment_searchCriteria" />
+        </where>
+    </sql>
+
+    <select id="selectList" parameterType="java.util.Map"
+            resultMap="ExamSubjectScore">
+        SELECT pt.*, exam.examname
+        <include refid="listFilter" />
+        ORDER BY pt.examid ASC, gradeid ASC, subjectid ASC
+        <include refid="BaseMapper.sqlFragment_pagination" />
+    </select>
+
+    <select id="countList" parameterType="java.util.Map"
+            resultType="java.lang.Integer">
+        SELECT COUNT(*)
+        <include refid="listFilter" />
+    </select>
+
+    <sql id="pubStatusFilter">
+        FROM <include refid="table" /> pt
+        LEFT JOIN  student_subject_score_entered_status ssses
+        ON pt.examid = ssses.examid
+        AND pt.gradeid = ssses.gradeid
+        AND pt.subjectid=ssses.subjectid
+        <where>
+            true
+            <include refid="BaseMapper.sqlFragment_searchCriteria" />
+        </where>
+    </sql>
+
+    <select id="selectPubStatusList" parameterType="java.util.Map"
+            resultMap="ExamSubjectScore">
+        SELECT pt.*, ssses.score_entered_count, ssses.score_unentered_count, ssses.exam_missed_count
+        <include refid="pubStatusFilter" />
+        ORDER BY pt.examid ASC, gradeid ASC, subjectid ASC
+        <include refid="BaseMapper.sqlFragment_pagination" />
+    </select>
+
+    <select id="countPubStatusList" parameterType="java.util.Map"
+            resultType="java.lang.Integer">
+        SELECT COUNT(*)
+        <include refid="pubStatusFilter" />
+    </select>
+</mapper>

@@ -1,0 +1,118 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!--
+
+       Copyright 2015-2016 the original author or authors.
+
+       Licensed under the Apache License, Version 2.0 (the "License");
+       you may not use this file except in compliance with the License.
+       You may obtain a copy of the License at
+
+          http://www.apache.org/licenses/LICENSE-2.0
+
+       Unless required by applicable law or agreed to in writing, software
+       distributed under the License is distributed on an "AS IS" BASIS,
+       WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+       See the License for the specific language governing permissions and
+       limitations under the License.
+
+-->
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.tianwen.springcloud.microservice.score.dao.ExamMapper">
+
+    <sql id="table">t_e_cj_exam</sql>
+    <sql id="notDeleted">AND status!='9'</sql>
+
+    <resultMap id="JoinedExam" type="com.tianwen.springcloud.microservice.score.entity.Exam">
+        <result column="examid" property="id" />
+        <result column="examname" property="name" />
+    </resultMap>
+
+    <resultMap id="Exam" type="com.tianwen.springcloud.microservice.score.entity.Exam">
+        <result column="examid" property="id" />
+        <result column="examname" property="name" />
+        <result column="termid" property="termId" />
+        <result column="examtypeid" property="typeId" />
+        <result column="schoolsectionid" property="schoolSectionId" />
+        <result column="examstartday" property="startDate" />
+        <result column="examendday" property="endDate" />
+        <result column="examnumber" property="number" />
+        <result column="status" property="status" />
+        <result column="schoolid" property="schoolId" />
+
+        <result column="createtime" property="createdTime" />
+        <result column="lastmodifytime" property="lastModifiedTime" />
+        <result column="creatorid" property="creatorId" />
+        <result column="creatorname" property="creatorName" />
+
+        <result column="examcount" property="examCount" />
+    </resultMap>
+
+    <sql id="listFilter">
+        FROM <include refid="table" /> exam
+        <where>
+            true
+            <include refid="BaseMapper.sqlFragment_searchCriteria" />
+        </where>
+    </sql>
+
+    <select id="selectList" parameterType="java.util.Map"
+            resultMap="Exam">
+        SELECT *
+        <include refid="listFilter" />
+        <include refid="BaseMapper.sqlFragment_orderBy" />
+        <include refid="BaseMapper.sqlFragment_pagination" />
+    </select>
+
+    <select id="countList" parameterType="java.util.Map"
+            resultType="java.lang.Integer">
+        SELECT COUNT(*)
+        <include refid="listFilter" />
+    </select>
+
+    <select id="getSimpleList" parameterType="java.util.Map"
+            resultType="com.tianwen.springcloud.microservice.score.entity.Exam">
+            SELECT exam.examid id, exam.examname as name, exam.examstartday start_date, exam.examendday end_date,
+            exam.creatorid as creator_id, status, synctime, syncstatus
+            FROM
+            <include refid="table"/> exam
+            <include refid="BaseMapper.joinExamGradeForExam"/>
+            INNER JOIN <include refid="com.tianwen.springcloud.microservice.score.dao.ExamGradeClassSubjectMapper.table"/> pt USING(examid)
+            <where>
+                true
+                <include refid="BaseMapper.sqlFragment_searchCriteria"/>
+                <include refid="BaseMapper.filterTeacherScope"/>
+            </where>
+            GROUP BY id, name, start_date, end_date, creatorid, status
+            <include refid="BaseMapper.sqlFragment_orderBy"/>
+    </select>
+
+    <select id="getTermIdList" parameterType="java.util.Map"
+            resultType="java.lang.String">
+        SELECT DISTINCT exam.termid
+        FROM <include refid="table" /> exam
+        <include refid="BaseMapper.joinExamGradeForExam" />
+        INNER JOIN <include refid="com.tianwen.springcloud.microservice.score.dao.ExamGradeClassSubjectMapper.table"/> pt USING(examid)
+        <where>
+            true
+            <include refid="BaseMapper.sqlFragment_searchCriteria" />
+            <include refid="BaseMapper.filterTeacherScope" />
+        </where>
+        ORDER BY exam.termid
+    </select>
+
+    <select id="getTypeIdList" parameterType="java.util.Map"
+            resultType="java.lang.String">
+        SELECT DISTINCT exam.examtypeid
+        FROM <include refid="table" /> exam
+        <include refid="BaseMapper.joinExamGradeForExam" />
+        INNER JOIN <include refid="com.tianwen.springcloud.microservice.score.dao.ExamGradeClassSubjectMapper.table"/> pt USING(examid)
+        <where>
+            true
+            <include refid="BaseMapper.sqlFragment_searchCriteria" />
+            <include refid="BaseMapper.filterTeacherScope" />
+        </where>
+        ORDER BY exam.examtypeid
+    </select>
+</mapper>

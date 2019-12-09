@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!--
+
+       Copyright 2015-2016 the original author or authors.
+
+       Licensed under the Apache License, Version 2.0 (the "License");
+       you may not use this file except in compliance with the License.
+       You may obtain a copy of the License at
+
+          http://www.apache.org/licenses/LICENSE-2.0
+
+       Unless required by applicable law or agreed to in writing, software
+       distributed under the License is distributed on an "AS IS" BASIS,
+       WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+       See the License for the specific language governing permissions and
+       limitations under the License.
+
+-->
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.tianwen.springcloud.microservice.score.dao.ExamPartScoreMapper">
+
+    <sql id="table">t_e_cj_exam_part_score</sql>
+
+    <resultMap id="ExamPartScore" type="com.tianwen.springcloud.microservice.score.entity.ExamPartScore">
+        <result column="exampartscoreid" property="id" />
+        <result column="examid" property="examId" />
+        <result column="subjectid" property="subjectId" />
+        <result column="gradeid" property="gradeId" />
+        <result column="classtype" property="classType" />
+        <result column="questionno" property="questionNo" />
+        <result column="bigno" property="bigNo" />
+        <result column="score" property="score" />
+        <result column="examsubjectid" property="examSubjectId" />
+        <result column="volumeid" property="volumeId" />
+        <result column="questioncategoryid" property="questionCategoryId" />
+        <result column="managerid" property="managerId" />
+        <result column="managername" property="managerName" />
+        <result column="submittime" property="submitTime" />
+        <result column="smallno" property="smallNo" />
+        <result column="questiontypeid" property="questionTypeId" />
+        <association property="exam" resultMap="com.tianwen.springcloud.microservice.score.dao.ExamMapper.JoinedExam" />
+    </resultMap>
+
+    <sql id="listFilter">
+        FROM <include refid="table" /> pt
+        INNER JOIN <include refid="com.tianwen.springcloud.microservice.score.dao.ExamMapper.table" /> exam on exam.examid=pt.examid
+        <where>
+            true
+            <include refid="BaseMapper.sqlFragment_searchCriteria" />
+        </where>
+    </sql>
+
+    <select id="selectList" parameterType="java.util.Map"
+            resultMap="ExamPartScore">
+        SELECT pt.*, exam.examname
+        <include refid="listFilter" />
+        ORDER BY pt.examid asc, pt.gradeid asc, pt.subjectid asc, exampartscoreid asc
+        <include refid="BaseMapper.sqlFragment_pagination" />
+    </select>
+
+    <select id="countList" parameterType="java.util.Map"
+            resultType="java.lang.Integer">
+        SELECT COUNT(*)
+        <include refid="listFilter" />
+    </select>
+</mapper>

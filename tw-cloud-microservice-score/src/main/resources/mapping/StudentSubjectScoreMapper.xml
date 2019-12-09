@@ -1,0 +1,174 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!--
+
+       Copyright 2015-2016 the original author or authors.
+
+       Licensed under the Apache License, Version 2.0 (the "License");
+       you may not use this file except in compliance with the License.
+       You may obtain a copy of the License at
+
+          http://www.apache.org/licenses/LICENSE-2.0
+
+       Unless required by applicable law or agreed to in writing, software
+       distributed under the License is distributed on an "AS IS" BASIS,
+       WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+       See the License for the specific language governing permissions and
+       limitations under the License.
+
+-->
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.tianwen.springcloud.microservice.score.dao.StudentSubjectScoreMapper">
+
+    <sql id="table">t_e_cj_stu_subject_score</sql>
+
+    <resultMap id="StudentSubjectScore" type="com.tianwen.springcloud.microservice.score.entity.StudentSubjectScore">
+        <result column="stusubjectscoreid" property="id" />
+        <result column="examid" property="examId" />
+        <result column="gradeid" property="gradeId" />
+        <result column="classtype" property="classType" />
+        <result column="subjectid" property="subjectId" />
+        <result column="classid" property="classId" />
+        <result column="stuid" property="studentId" />
+        <result column="stuname" property="studentName" />
+        <result column="examroomno" property="examRoomNo" />
+        <result column="setno" property="setNo" />
+        <result column="examcard" property="examCard" />
+        <result column="studentexamno" property="studentExamNo" />
+        <result column="schoolno" property="schoolNo" />
+        <result column="score" property="score" />
+        <result column="newscore" property="newScore" />
+        <result column="reason" property="reason" />
+        <result column="schoolid" property="schoolId" />
+        <result column="status" property="status" />
+        <result column="sex" property="sex" />
+        <result column="sexname" property="sexName" />
+        <result column="stuno" property="studentNo" />
+        <result column="managerid" property="managerId" />
+        <result column="managername" property="managerName" />
+        <result column="submittime" property="submitTime" />
+        <association property="exam" resultMap="com.tianwen.springcloud.microservice.score.dao.ExamMapper.Exam" />
+    </resultMap>
+
+    <sql id="listFilter">
+        FROM <include refid="table" /> pt
+        <include refid="BaseMapper.joinExam" />
+        <include refid="BaseMapper.joinExamGrade" />
+        <where>
+            true
+            <include refid="BaseMapper.sqlFragment_searchCriteria" />
+        </where>
+    </sql>
+
+    <select id="selectList" parameterType="java.util.Map"
+            resultMap="StudentSubjectScore">
+        SELECT pt.*, exam.examname, exam.examtypeid
+        <include refid="listFilter" />
+        order by pt.gradeid asc, pt.classid asc, pt.stuno asc, pt.stuid asc, exam.examstartday desc, pt.subjectid asc
+        <include refid="BaseMapper.sqlFragment_pagination" />
+    </select>
+
+    <select id="countList" parameterType="java.util.Map"
+            resultType="java.lang.Integer">
+        SELECT COUNT(*)
+        <include refid="listFilter" />
+    </select>
+
+    <sql id="scoreEnteredListFilter">
+        <where>
+            true
+            <include refid="BaseMapper.sqlFragment_searchCriteria" />
+            <include refid="BaseMapper.filterSubject" />
+            AND NOT (pt.score IS NULL OR pt.score = '' OR pt.score = '-1' OR pt.score = '-1.0')
+        </where>
+    </sql>
+    <select id="getScoreEnteredList" parameterType="com.tianwen.springcloud.microservice.score.entity.request.StudentSubjectFilter"
+            resultMap="StudentSubjectScore">
+        SELECT *
+        FROM <include refid="table" /> pt
+        <include refid="BaseMapper.joinExam" />
+        <include refid="scoreEnteredListFilter" />
+        ORDER  BY pt.classid, pt.stuid ASC
+    </select>
+    <select id="getScoreEnteredCount" parameterType="com.tianwen.springcloud.microservice.score.entity.request.StudentSubjectFilter" resultType="java.lang.Integer">
+        SELECT
+        COUNT(*)
+        FROM <include refid="table" /> pt
+        <include refid="BaseMapper.joinExam" />
+        <include refid="scoreEnteredListFilter" />
+    </select>
+
+    <sql id="scoreUnenteredListFilter">
+        <where>
+            true
+            <include refid="BaseMapper.sqlFragment_searchCriteria" />
+            <include refid="BaseMapper.filterSubject" />
+            AND (pt.score IS NULL OR pt.score = '')
+        </where>
+    </sql>
+    <select id="getScoreUnenteredList" parameterType="com.tianwen.springcloud.microservice.score.entity.request.StudentSubjectFilter"
+            resultMap="StudentSubjectScore">
+        SELECT *
+        FROM <include refid="table" /> pt
+        <include refid="BaseMapper.joinExam" />
+        <include refid="scoreUnenteredListFilter" />
+        ORDER  BY pt.classid, pt.stuid ASC
+    </select>
+    <select id="getScoreUnenteredCount" parameterType="com.tianwen.springcloud.microservice.score.entity.request.StudentSubjectFilter" resultType="java.lang.Integer">
+        SELECT
+        COUNT(*)
+        FROM <include refid="table" /> pt
+        <include refid="BaseMapper.joinExam" />
+        <include refid="scoreUnenteredListFilter" />
+    </select>
+
+    <sql id="examMissedListFilter">
+        <where>
+            true
+            <include refid="BaseMapper.sqlFragment_searchCriteria" />
+            <include refid="BaseMapper.filterSubject" />
+            AND (pt.score = '-1' OR pt.score = '-1.0')
+        </where>
+    </sql>
+    <select id="getExamMissedList" parameterType="com.tianwen.springcloud.microservice.score.entity.request.StudentSubjectFilter"
+            resultMap="StudentSubjectScore">
+        SELECT *
+        FROM <include refid="table" /> pt
+        <include refid="BaseMapper.joinExam" />
+        <include refid="examMissedListFilter" />
+        ORDER  BY pt.classid, pt.stuid ASC
+    </select>
+    <select id="getExamMissedCount" parameterType="com.tianwen.springcloud.microservice.score.entity.request.StudentSubjectFilter" resultType="java.lang.Integer">
+        SELECT
+        COUNT(*)
+        FROM <include refid="table" /> pt
+        <include refid="BaseMapper.joinExam" />
+        <include refid="examMissedListFilter" />
+    </select>
+
+    <sql id="scoreInvalidListFilter">
+        <where>
+            true
+            <include refid="BaseMapper.sqlFragment_searchCriteria" />
+            AND text2numeric(pt.score) > text2numeric(esc.score)
+        </where>
+    </sql>
+    <select id="getScoreInvalidList" parameterType="com.tianwen.springcloud.microservice.score.entity.request.StudentSubjectFilter"
+            resultMap="StudentSubjectScore">
+        SELECT *
+        FROM <include refid="table" /> pt
+        <include refid="BaseMapper.joinExam" />
+        INNER JOIN <include refid="com.tianwen.springcloud.microservice.score.dao.ExamSubjectScoreMapper.table" /> esc USING(examid, gradeid, subjectid)
+        <include refid="scoreInvalidListFilter" />
+        ORDER  BY pt.classid, pt.stuid, pt.subjectid
+    </select>
+    <select id="getScoreInvalidCount" parameterType="com.tianwen.springcloud.microservice.score.entity.request.StudentSubjectFilter" resultType="java.lang.Integer">
+        SELECT
+        COUNT(*)
+        FROM <include refid="table" /> pt
+        <include refid="BaseMapper.joinExam" />
+        INNER JOIN <include refid="com.tianwen.springcloud.microservice.score.dao.ExamSubjectScoreMapper.table" /> esc USING(examid, gradeid, subjectid)
+        <include refid="scoreInvalidListFilter" />
+    </select>
+</mapper>

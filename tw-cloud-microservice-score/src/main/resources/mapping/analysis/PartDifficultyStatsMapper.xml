@@ -1,0 +1,113 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!--
+
+       Copyright 2015-2016 the original author or authors.
+
+       Licensed under the Apache License, Version 2.0 (the "License");
+       you may not use this file except in compliance with the License.
+       You may obtain a copy of the License at
+
+          http://www.apache.org/licenses/LICENSE-2.0
+
+       Unless required by applicable law or agreed to in writing, software
+       distributed under the License is distributed on an "AS IS" BASIS,
+       WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+       See the License for the specific language governing permissions and
+       limitations under the License.
+
+-->
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.tianwen.springcloud.microservice.score.dao.analysis.PartDifficultyStatsMapper">
+
+    <sql id="listData">
+        WITH
+            stu_partscore_data AS (
+                SELECT exampartscoreid, pt.stuid, pt.questioncategoryid, pt.questionno, pt.questiontypeid, pt.smallno, text2score(et.score) full_score, text2score(pt.score) score
+                FROM t_e_cj_stu_part_score pt
+                INNER JOIN t_e_cj_exam exam USING(examid)
+                INNER JOIN t_e_cj_exam_part_score et USING(subjectid, examid, gradeid, questiontypeid, smallno)
+                <include refid="BaseMapper.joinExamGrade" />
+                <where>
+                    true
+                    <include refid="BaseMapper.sqlFragment_searchCriteria" />
+                    <include refid="BaseMapper.filterSubject" />
+                </where>
+            ),
+            question_partscore_data AS (
+                SELECT
+                exampartscoreid,
+                questioncategoryid,
+                questionno,
+                smallno,
+                questiontypeid,
+                count(stuid) applied_exam_count,
+                max(score) max_score,
+                min(score) min_score,
+                avg(score) score,
+                full_score,
+                sum(CASE WHEN score = full_score THEN 1 ELSE 0 END) full_score_count,
+                sum(CASE WHEN score = 0 THEN 1 ELSE 0 END) zero_score_count
+                FROM stu_partscore_data
+                GROUP BY exampartscoreid, smallno, questioncategoryid, questionno, questiontypeid, full_score
+            ),
+
+            percent_stats AS (
+                SELECT
+                exampartscoreid,
+                questioncategoryid,
+                questionno,
+                smallno,
+                questiontypeid,
+                applied_exam_count,
+                max_score,
+                min_score,
+                score,
+                (score / full_score * 100) rate,
+                (full_score_count / applied_exam_count * 100) full_score_rate,
+                (zero_score_count / applied_exam_count * 100) zero_score_rate,
+                (score / full_score) difficulty
+                FROM question_partscore_data
+            )
+
+    </sql>
+
+    <sql id="listFilter">
+        <where>
+            true
+            <include refid="BaseMapper.filterClass" />
+        </where>
+    </sql>
+
+    <select id="selectList" parameterType="com.tianwen.springcloud.microservice.score.entity.request.Request"
+            resultType="com.tianwen.springcloud.microservice.score.entity.analysis.PartDifficultyStats">
+        <include refid="listData" />
+        SELECT
+        exampartscoreid,
+        questioncategoryid question_category_id,
+        questionno question_no,
+        smallno small_no,
+        questiontypeid question_type_id,
+        applied_exam_count count,
+        max_score,
+        min_score,
+        round(score, 2) score,
+        round(rate, 2) rate,
+        round(full_score_rate, 2) full_score_rate,
+        round(zero_score_rate, 2) zero_score_rate,
+        round(difficulty, 2) difficulty
+        FROM percent_stats
+        <include refid="listFilter" />
+        ORDER BY exampartscoreid
+        <include refid="BaseMapper.sqlFragment_pagination" />
+    </select>
+
+    <select id="countList" parameterType="com.tianwen.springcloud.microservice.score.entity.request.Request"
+            resultType="Integer">
+        <include refid="listData" />
+        SELECT COUNT(*) FROM percent_stats
+        <include refid="listFilter" />
+    </select>
+
+</mapper>
