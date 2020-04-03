@@ -1,0 +1,151 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!--
+
+       Copyright 2015-2016 the original author or authors.
+
+       Licensed under the Apache License, Version 2.0 (the "License");
+       you may not use this file except in compliance with the License.
+       You may obtain a copy of the License at
+
+          http://www.apache.org/licenses/LICENSE-2.0
+
+       Unless required by applicable law or agreed to in writing, software
+       distributed under the License is distributed on an "AS IS" BASIS,
+       WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+       See the License for the specific language governing permissions and
+       limitations under the License.
+
+-->
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.tianwen.springcloud.microservice.score.dao.analysis.SubjectAverageScoreMapper">
+
+    <sql id="listData">
+        WITH
+        stu_sbj_score_data AS  (
+            SELECT pt.gradeid, pt.subjectid, classid, stuid,
+            teacherid, teachername,
+            avg(text2score(pt.score)) score,
+            count(*) exam_count,
+            sum(CASE WHEN pt.score = '-1' THEN 0 ELSE 1 END) applied_exam_count
+            FROM t_e_cj_stu_subject_score pt
+            INNER JOIN t_e_cj_exam exam USING(examid)
+            <include refid="BaseMapper.joinExamGrade" />
+            <where>
+                true
+                <include refid="BaseMapper.sqlFragment_searchCriteria" />
+                <include refid="BaseMapper.filterSubject" />
+            </where>
+            GROUP BY  pt.gradeid, classid, stuid, subjectid, teacherid, teachername
+        ),
+
+        stu_total_score_data AS  (
+            SELECT pt.gradeid, classid, stuid,
+            sum(score) score,
+            max(exam_count) exam_count,
+            max(applied_exam_count) applied_exam_count
+            FROM stu_sbj_score_data pt
+            GROUP BY  pt.gradeid, classid, stuid
+        ),
+
+        class_sbj_score_data AS (
+            SELECT gradeid, subjectid, classid,
+            teacherid, teachername,
+            sum(exam_count) stu_exam_count,
+            sum(applied_exam_count) stu_applied_exam_count,
+            max(score) max_score,
+            min(score) min_score,
+            avg(score) score
+            FROM stu_sbj_score_data
+            GROUP BY  gradeid, classid, subjectid, teacherid, teachername
+        ),
+
+        class_total_score_data AS (
+            SELECT gradeid, 'TOTAL' subjectid, classid,
+            null teacherid, null teachername,
+            sum(exam_count) stu_exam_count,
+            sum(applied_exam_count) stu_applied_exam_count,
+            max(score) max_score,
+            min(score) min_score,
+            avg(score) score
+            FROM stu_total_score_data
+            GROUP BY  gradeid, classid
+        ),
+
+        class_all_score_data AS (
+            SELECT * FROM class_sbj_score_data
+            UNION
+            SELECT * FROM class_total_score_data
+        ),
+
+        grade_sbj_score_data AS (
+            SELECT gradeid, subjectid, 'TOTAL' classid,
+            null teacherid, null teachername,
+            sum(stu_exam_count) stu_exam_count,
+            sum(stu_applied_exam_count) stu_applied_exam_count,
+            max(max_score) max_score,
+            min(min_score) min_score,
+            avg(score) score
+            FROM class_all_score_data
+            GROUP BY  gradeid, subjectid
+        ),
+
+        rank_stats AS (
+
+            SELECT all_data.*,
+            (all_data.score - grade_data.score) diff,
+            RANK() OVER (PARTITION BY subjectid ORDER BY all_data.score DESC) AS rank
+            FROM class_all_score_data all_data
+            LEFT JOIN grade_sbj_score_data grade_data USING(subjectid)
+
+            UNION
+
+            SELECT *, null diff, null rank FROM grade_sbj_score_data
+        )
+    </sql>
+
+    <sql id="listFilter">
+        <where>
+            true
+            <include refid="BaseMapper.filterSubject" />
+            <include refid="BaseMapper.filterClass" />
+        </where>
+    </sql>
+
+    <select id="selectList" parameterType="com.tianwen.springcloud.microservice.score.entity.request.Request"
+            resultType="com.tianwen.springcloud.microservice.score.entity.analysis.SubjectAverageScore">
+        <include refid="listData" />
+        SELECT
+        subjectid AS subject_id,
+        classid AS class_id,
+        teacherid, teachername,
+        stu_exam_count AS total_count,
+        stu_applied_exam_count AS apply_count,
+        round(max_score, 2) AS max_score,
+        round(min_score, 2) AS min_score,
+        round(score, 2) AS score,
+        round(diff, 2) AS diff,
+        rank,
+
+        (CASE WHEN classid='TOTAL' THEN 1 ELSE 0 END) class_total,
+        (CASE WHEN subjectid='TOTAL' THEN 1 ELSE 0 END) subject_total
+
+        FROM rank_stats
+
+        <include refid="listFilter" />
+
+        ORDER BY subject_total, subjectid, class_total, classid
+
+        <include refid="BaseMapper.sqlFragment_pagination" />
+    </select>
+
+    <select id="countList" parameterType="com.tianwen.springcloud.microservice.score.entity.request.Request"
+            resultType="Integer">
+        <include refid="listData" />
+        SELECT COUNT(*)
+        FROM rank_stats
+        <include refid="listFilter" />
+    </select>
+
+</mapper>

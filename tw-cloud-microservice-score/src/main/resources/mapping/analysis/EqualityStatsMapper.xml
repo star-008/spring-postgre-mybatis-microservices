@@ -1,0 +1,205 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!--
+
+       Copyright 2015-2016 the original author or authors.
+
+       Licensed under the Apache License, Version 2.0 (the "License");
+       you may not use this file except in compliance with the License.
+       You may obtain a copy of the License at
+
+          http://www.apache.org/licenses/LICENSE-2.0
+
+       Unless required by applicable law or agreed to in writing, software
+       distributed under the License is distributed on an "AS IS" BASIS,
+       WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+       See the License for the specific language governing permissions and
+       limitations under the License.
+
+-->
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.tianwen.springcloud.microservice.score.dao.analysis.EqualityStatsMapper">
+
+    <sql id="listData">
+        WITH
+
+        <include refid="BaseMapper.stu_score_data" />,
+
+        class_count_data AS (
+            SELECT examid, examname,
+            classid,
+            classtype,
+            subjectid,
+            sum(exam_count) stu_exam_count,
+            sum(applied_exam_count) stu_applied_exam_count,
+            max(score) max_score,
+            min(score) min_score,
+            avg(score) score,
+            avg(full_score) full_score,
+
+            <foreach collection="filter.zoneList" item="zone">
+                <if test="zone.category != 'pz' or zone.type == null or zone.type == 'top'">
+                    sum(
+                    CASE WHEN (
+                    <if test="zone.highScore != null and zone.highScore != '' and zone.highScore != 0">
+                        score &lt; text2numeric(#{zone.highScore}) AND
+                    </if>
+                    score >= text2numeric(#{zone.lowScore})
+                    ) THEN 1 ELSE 0 END
+                    ) ${zone.category}_count_${zone.level},
+                </if>
+                <if test="zone.category == 'pz' and zone.type == 'last'">
+                    sum(
+                    CASE WHEN (
+                    score &lt; text2numeric(#{zone.lowScore})
+                    ) THEN 1 ELSE 0 END
+                    ) ${zone.category}_count_${zone.level},
+                </if>
+            </foreach>
+
+            teacherid, teachername
+            FROM  stu_score_data
+            GROUP BY examid, examname, classid, classtype, subjectid, teacherid, teachername
+        ),
+
+        class_percent_data AS (
+            SELECT examid, examname,
+            classid,
+            classtype,
+            subjectid,
+            stu_exam_count,
+            stu_applied_exam_count,
+            max_score,
+            min_score,
+            score,
+            full_score,
+
+            <foreach collection="filter.zoneList" item="zone">
+                ${zone.category}_count_${zone.level},
+                <if test="zone.category == 'pz'">
+                    (CASE WHEN stu_applied_exam_count != 0 THEN ${zone.category}_count_${zone.level}::NUMERIC / stu_applied_exam_count::NUMERIC ELSE 0 END) * 100 ${zone.category}_percent_${zone.level},
+                </if>
+            </foreach>
+
+            teacherid, teachername
+            FROM class_count_data
+        ),
+
+        grade_count_data AS (
+            SELECT examid, examname,
+            'TOTAL' classid,
+            '1' classtype,
+            subjectid,
+            sum(exam_count) stu_exam_count,
+            sum(applied_exam_count) stu_applied_exam_count,
+            max(score) max_score,
+            min(score) min_score,
+            avg(score) score,
+            avg(full_score) full_score,
+
+            <foreach collection="filter.zoneList" item="zone">
+                <if test="zone.category != 'pz' or zone.type == null or zone.type == 'top'">
+                    sum(
+                    CASE WHEN (
+                    <if test="zone.highScore != null and zone.highScore != '' and zone.highScore != 0">
+                        score &lt; text2numeric(#{zone.highScore}) AND
+                    </if>
+                    score >= text2numeric(#{zone.lowScore})
+                    ) THEN 1 ELSE 0 END
+                    ) ${zone.category}_count_${zone.level},
+                </if>
+                <if test="zone.category == 'pz' and zone.type == 'last'">
+                    sum(
+                    CASE WHEN (
+                    score &lt; text2numeric(#{zone.lowScore})
+                    ) THEN 1 ELSE 0 END
+                    ) ${zone.category}_count_${zone.level},
+                </if>
+            </foreach>
+
+            null teacherid, null teachername
+            FROM  grade_stu_score_data
+            GROUP BY examid, examname, subjectid
+        ),
+
+        grade_percent_data AS (
+            SELECT examid, examname,
+            classid,
+            classtype,
+            subjectid,
+            stu_exam_count,
+            stu_applied_exam_count,
+            max_score,
+            min_score,
+            score,
+            full_score,
+
+            <foreach collection="filter.zoneList" item="zone">
+                ${zone.category}_count_${zone.level},
+                <if test="zone.category == 'pz'">
+                    (CASE WHEN stu_applied_exam_count != 0 THEN ${zone.category}_count_${zone.level}::NUMERIC / stu_applied_exam_count::NUMERIC ELSE 0 END) * 100 ${zone.category}_percent_${zone.level},
+                </if>
+            </foreach>
+
+            teacherid, teachername
+            FROM grade_count_data
+        ),
+
+        percent_stats AS (
+            SELECT * FROM class_percent_data
+            UNION
+            SELECT * FROM grade_percent_data
+        )
+
+    </sql>
+
+    <sql id="listFilter">
+        <where>
+            true
+            <include refid="BaseMapper.filterClass" />
+            <include refid="BaseMapper.filterSubject" />
+            AND (subjectid != 'TOTAL' OR classtype = '1')
+        </where>
+    </sql>
+
+    <select id="selectList" parameterType="com.tianwen.springcloud.microservice.score.entity.request.Request"
+            resultType="java.util.Map">
+        <include refid="listData" />
+        SELECT
+        examid exam_id,
+        examname exam_name,
+        classid class_id,
+        classtype,
+        stu_exam_count total_count,
+        stu_applied_exam_count apply_count,
+        max_score,
+        min_score,
+        round(score, 2) score,
+        round(full_score, 2) full_score,
+
+        <foreach collection="filter.zoneList" item="zone">
+            ${zone.category}_count_${zone.level},
+            <if test="zone.category == 'pz'">
+                round(${zone.category}_percent_${zone.level}, 2) ${zone.category}_percent_${zone.level},
+            </if>
+        </foreach>
+        teacherid teacher_id,
+        teachername teacher_name,
+
+        (CASE WHEN classid='TOTAL' THEN 1 ELSE 0 END) class_total
+
+        FROM percent_stats
+        <include refid="listFilter" />
+        ORDER BY examid, class_total ASC, classid ASC
+        <include refid="BaseMapper.sqlFragment_pagination" />
+    </select>
+
+    <select id="countList" parameterType="com.tianwen.springcloud.microservice.score.entity.request.Request"
+            resultType="Integer">
+        <include refid="listData" />
+        SELECT COUNT(*) FROM percent_stats
+        <include refid="listFilter" />
+    </select>
+
+</mapper>

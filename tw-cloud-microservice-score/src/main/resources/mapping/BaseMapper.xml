@@ -1,0 +1,271 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!--
+
+       Copyright 2015-2016 the original author or authors.
+
+       Licensed under the Apache License, Version 2.0 (the "License");
+       you may not use this file except in compliance with the License.
+       You may obtain a copy of the License at
+
+          http://www.apache.org/licenses/LICENSE-2.0
+
+       Unless required by applicable law or agreed to in writing, software
+       distributed under the License is distributed on an "AS IS" BASIS,
+       WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+       See the License for the specific language governing permissions and
+       limitations under the License.
+
+-->
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="BaseMapper">
+
+    <!-- 分页 -->
+    <sql id="sqlFragment_pagination">
+        <if test="paginationDisabled == null or paginationDisabled == 0">
+            <if test="numPerPage != null">
+                limit #{numPerPage}
+            </if>
+            <if test="start != null">
+                offset #{start}
+            </if>
+        </if>
+    </sql>
+
+    <sql id="sqlFragment_orderBy">
+        <if test="orderMethods != null and !orderMethods.isEmpty()">
+            ORDER BY
+            <foreach collection="orderMethods" item="orderMethod" separator=",">
+                ${orderMethod.field} ${orderMethod.method.value}
+            </foreach>
+        </if>
+    </sql>
+
+    <!-- 查询条件 -->
+    <sql id="sqlFragment_searchCriteria">
+        <if test="oredCriteria != null and oredCriteria.size != 0">
+            <trim prefix="and(" suffix=")">
+                <foreach collection="oredCriteria" item="criteria" separator="or">
+                    <if test="criteria.valid">
+                        <trim prefix="(" prefixOverrides="and" suffix=")">
+                            <foreach collection="criteria.criteria" item="criterion">
+                                <choose>
+                                    <when test="criterion.noValue">
+                                        and ${criterion.condition}
+                                    </when>
+                                    <when test="criterion.singleValue">
+                                        and ${criterion.condition} #{criterion.value}
+                                    </when>
+                                    <when test="criterion.betweenValue">
+                                        and ${criterion.condition} #{criterion.value} and #{criterion.secondValue}
+                                    </when>
+                                    <when test="criterion.listValue">
+                                        and ${criterion.condition}
+                                        <foreach close=")" collection="criterion.value" item="listItem" open="("
+                                                 separator=",">
+                                            #{listItem}
+                                        </foreach>
+                                    </when>
+                                </choose>
+                            </foreach>
+                        </trim>
+                    </if>
+                </foreach>
+            </trim>
+        </if>
+    </sql>
+
+    <sql id="filterGrade">
+        <if test="filter.gradeId != null and !filter.gradeId.isEmpty() and !filter.gradeId.equals('TOTAL')">
+            AND gradeid=#{filter.gradeId}
+        </if>
+        <if test="filter.gradeIdList != null and !filter.gradeIdList.isEmpty()">
+            AND gradeid IN
+            <foreach collection="filter.gradeIdList" item="gradeId" open="(" close=")" separator=",">
+                #{gradeId}
+            </foreach>
+        </if>
+    </sql>
+
+    <sql id="filterClassType">
+        <if test="filter.classType != null and !filter.classType.isEmpty()">
+            AND classtype=#{filter.classType}
+        </if>
+    </sql>
+
+    <sql id="filterClass">
+        <if test="filter.classId != null and !filter.classId.isEmpty()">
+            AND classid=#{filter.classId}
+        </if>
+        <if test="filter.classIdList != null and !filter.classIdList.isEmpty()">
+            AND classid IN
+            <foreach collection="filter.classIdList" item="classId" open="(" close=")" separator=",">
+                #{classId}
+            </foreach>
+        </if>
+    </sql>
+
+    <sql id="filterSubject">
+        <if test="filter.subjectId != null and !filter.subjectId.isEmpty()">
+            AND subjectid=#{filter.subjectId}
+        </if>
+        <if test="filter.subjectIdList != null and !filter.subjectIdList.isEmpty()">
+            AND subjectid IN
+            <foreach collection="filter.subjectIdList" item="subjectId" open="(" close=")" separator=",">
+                #{subjectId}
+            </foreach>
+        </if>
+    </sql>
+
+    <sql id="filterVolume">
+        <if test="filter.volumeId != null and !filter.volumeId.isEmpty() and !filter.volumeId.equals('TOTAL')">
+            AND volumeid=#{filter.volumeId}
+        </if>
+        <if test="filter.volumeIdList != null and !filter.volumeIdList.isEmpty()">
+            AND volumeid IN
+            <foreach collection="filter.volumeIdList" item="volumeId" open="(" close=")" separator=",">
+                #{volumeId}
+            </foreach>
+        </if>
+    </sql>
+
+    <sql id="filterStudent">
+        <if test="filter.studentId != null and !filter.studentId.isEmpty()">
+            AND stuid=#{filter.studentId}
+        </if>
+        <if test="filter.studentIdList != null and !filter.studentIdList.isEmpty()">
+            AND stuid IN
+            <foreach collection="filter.studentIdList" item="studentId" open="(" close=")" separator=",">
+                #{studentId}
+            </foreach>
+        </if>
+    </sql>
+
+    <sql id="filterTeacherScope">
+        <if test="filter.checkTeacherScope != null and filter.checkTeacherScope > 0">
+            <if test="filter.teacherId != null and !filter.teacherId.isEmpty()">
+                AND (
+                    (
+                        pt.teacherid=#{filter.teacherId}
+                        <if test="filter.teacherClassIdList != null and !filter.teacherClassIdList.isEmpty()">OR pt.classid
+                            IN
+                            <foreach collection=" filter.teacherClassIdList" item="classId" open="(" close=")" separator=",">
+                                #{classId}
+                            </foreach>
+                        </if>
+                    )
+                    <if test="filter.belongsToManagerGeneral">
+                        OR (
+                            exam.creatorid=#{filter.teacherId}
+                        )
+                    </if>
+                )
+            </if>
+        </if>
+    </sql>
+
+    <sql id="joinExam">
+        INNER JOIN <include refid="com.tianwen.springcloud.microservice.score.dao.ExamMapper.table" /> exam
+        USING(examid)
+    </sql>
+
+    <sql id="joinExamGrade">
+        LEFT JOIN v_con_cj_exam_grade eg
+        USING(examid, gradeid)
+    </sql>
+
+    <sql id="joinExamGradeForExam">
+        LEFT JOIN v_con_cj_exam_grade eg
+        USING(examid)
+    </sql>
+
+    <!-- Explanation: pt -> Primary Table -->
+
+    <!-- Analysis Data Start -->
+    <sql id="stu_score_data">
+        stu_sbj_score_data AS (
+            SELECT
+            pt.examid, exam.examname, pt.gradeid, pt.classtype, pt.classid, stuid, stuname, stuno, pt.subjectid,
+            teacherid, teachername,
+            1 exam_count,
+            (CASE WHEN (pt.score = '-1' OR pt.score = '-1.0') THEN 0 ELSE 1 END) applied_exam_count,
+            text2score(pt.score) score,
+            text2score(ess.score) full_score
+
+            FROM t_e_cj_stu_subject_score pt
+            INNER JOIN t_e_cj_exam exam USING(examid)
+            INNER JOIN t_e_cj_exam_subject_score ess USING(examid, gradeid, subjectid)
+            <include refid="BaseMapper.joinExamGrade" />
+
+            <where>
+                true
+                <include refid="BaseMapper.sqlFragment_searchCriteria" />
+            </where>
+        ),
+
+        stu_total_score_data AS (
+            SELECT
+            examid, examname, gradeid, classtype, classid, stuid, stuname, stuno, 'TOTAL' subjectid,
+            max(exam_count) exam_count,
+            max(applied_exam_count) applied_exam_count,
+            sum(score) as score,
+            sum(full_score) as full_score
+
+            FROM stu_sbj_score_data pt
+            GROUP BY examid, examname, gradeid, classtype, classid, stuid, stuname, stuno
+        ),
+
+        special_class_teacher_data AS (
+            SELECT DISTINCT examid, gradeid, classid, teacherid, teachername
+            FROM stu_sbj_score_data
+            WHERE classtype='2'
+        ),
+
+        stu_score_data AS (
+            SELECT *
+            FROM stu_sbj_score_data
+
+            UNION
+
+            SELECT
+                examid, examname, gradeid, classtype, classid, stuid, stuname, stuno, subjectid,
+                teacherid, teachername,
+                exam_count,
+                applied_exam_count,
+                score,
+                full_score
+            FROM stu_total_score_data LEFT JOIN special_class_teacher_data USING(examid, gradeid, classid)
+        ),
+
+        grade_stu_total_score_data AS (
+            SELECT
+            examid, examname, gradeid, 'TOTAL' classtype, 'TOTAL' classid, stuid, stuname, stuno, 'TOTAL' subjectid,
+            null teacherid, null teachername,
+            max(exam_count) exam_count,
+            max(applied_exam_count) applied_exam_count,
+            sum(score) as score,
+            sum(full_score) as full_score
+
+            FROM stu_sbj_score_data pt
+            GROUP BY examid, examname, gradeid, stuid, stuname, stuno
+        ),
+
+        grade_stu_score_data AS (
+            SELECT *
+            FROM stu_sbj_score_data
+
+            UNION
+
+            SELECT *
+            FROM grade_stu_total_score_data
+        )
+
+    </sql>
+
+    <sql id="rank">
+        <if test="filter.more.parellelSumEnabled == 1">DENSE_RANK() OVER</if>
+        <if test="filter.more.parellelSumEnabled != 1">RANK() OVER</if>
+    </sql>
+    <!-- Analysis Data END -->
+</mapper>

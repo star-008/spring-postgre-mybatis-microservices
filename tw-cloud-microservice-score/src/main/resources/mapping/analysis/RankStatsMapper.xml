@@ -1,0 +1,258 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!--
+
+       Copyright 2015-2016 the original author or authors.
+
+       Licensed under the Apache License, Version 2.0 (the "License");
+       you may not use this file except in compliance with the License.
+       You may obtain a copy of the License at
+
+          http://www.apache.org/licenses/LICENSE-2.0
+
+       Unless required by applicable law or agreed to in writing, software
+       distributed under the License is distributed on an "AS IS" BASIS,
+       WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+       See the License for the specific language governing permissions and
+       limitations under the License.
+
+-->
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.tianwen.springcloud.microservice.score.dao.analysis.RankStatsMapper">
+
+    <sql id="listData">
+        WITH
+        stu_sbj_score_data AS (
+            SELECT pt.examid, exam.examname, pt.classtype, classid, pt.subjectid, stuid, stuname, stuno, sex, sexname, studentexamno, pt.score as realscore, text2score(pt.score) score,
+            text2score(ess.score) fullscore,
+            count(stuid) over(PARTITION BY pt.examid, subjectid) stu_count_in_grade
+            FROM t_e_cj_stu_subject_score pt
+            INNER JOIN t_e_cj_exam exam USING(examid)
+            INNER JOIN t_e_cj_exam_subject_score ess USING(examid, gradeid, classtype, subjectid)
+            <include refid="BaseMapper.joinExamGrade" />
+            <where>
+                true
+                <include refid="BaseMapper.sqlFragment_searchCriteria" />
+            </where>
+        ),
+
+        class_stu_data AS (
+            SELECT classtype, classid, stuid
+            FROM (
+            SELECT classtype, classid, stuid,
+            ROW_NUMBER() OVER(PARTITION BY stuid) rn
+            FROM stu_sbj_score_data
+            <where>
+                true
+                <include refid="BaseMapper.filterClass" />
+            </where>
+            GROUP BY stuid, classtype, classid
+            ) class_stu_data
+            WHERE rn=1
+        ),
+
+        stu_sbj_score_rank_stats AS (
+            SELECT pt.*,
+            <include refid="BaseMapper.rank"/> (PARTITION BY examid, pt.classtype, pt.classid, subjectid ORDER BY score DESC) AS stu_sbj_rank_in_class,
+            <include refid="BaseMapper.rank"/> (PARTITION BY examid, pt.classtype, subjectid ORDER BY score DESC) AS stu_sbj_rank_in_grade
+            FROM stu_sbj_score_data pt
+            INNER JOIN class_stu_data USING(stuid)
+            <where>
+                true
+                <include refid="BaseMapper.filterSubject" />
+            </where>
+        ),
+
+        stu_sbj_score_rank_count_stats AS (
+            SELECT *, count(*) over(PARTITION BY stu_sbj_rank_in_grade) rank_count
+            FROM stu_sbj_score_rank_stats
+        ),
+
+        stu_sbj_score_rank_percent_stats AS (
+            SELECT *,
+            calc_percent(stu_sbj_rank_in_grade, rank_count, stu_count_in_grade) rank_percent,
+            score / fullscore * 100 score_percent
+            FROM stu_sbj_score_rank_count_stats
+        ),
+
+        stu_normal_total_score_data AS (
+            SELECT examid, examname, classtype, classid, 'TOTAL' subjectid, stuid, stuname, stuno, sex, sexname, studentexamno,
+            '0' as realscore,
+            sum(score) AS score,
+            sum(fullscore) fullscore,
+            count(stuid) over(PARTITION BY examid) stu_count_in_grade
+            FROM stu_sbj_score_data
+            <where>
+                classtype='1'
+                <include refid="BaseMapper.filterSubject" />
+            </where>
+            GROUP BY examid, examname, classtype, classid, stuid, stuname, stuno, sex, sexname, studentexamno
+        ),
+
+        stu_normal_total_score_rank_stats AS (
+            SELECT *,
+            <include refid="BaseMapper.rank"/> (PARTITION BY classid ORDER BY score DESC) AS stu_sbj_rank_in_class,
+            <include refid="BaseMapper.rank"/> (ORDER BY score DESC) AS stu_sbj_rank_in_grade
+            FROM stu_normal_total_score_data
+        ),
+
+        stu_normal_total_score_rank_count_stats AS (
+            SELECT *,count(*) over(PARTITION BY stu_sbj_rank_in_grade) rank_count
+            FROM stu_normal_total_score_rank_stats
+        ),
+
+        stu_normal_total_score_rank_percent_stats AS (
+            SELECT *,
+            calc_percent(stu_sbj_rank_in_grade, rank_count, stu_count_in_grade) rank_percent,
+            score / fullscore * 100 score_percent
+            FROM stu_normal_total_score_rank_count_stats
+        ),
+
+        stu_total_score_rank_percent_stats AS (
+            SELECT *
+            FROM stu_sbj_score_rank_percent_stats
+            UNION
+            SELECT *
+            FROM stu_normal_total_score_rank_percent_stats
+        ),
+
+        stu_all_total_score_data AS (
+            SELECT examid, examname, 'ALL_TOTAL' subjectid, stuid, stuname, stuno, sex, sexname, studentexamno,
+            <if test="filter.subjectIdList == null || filter.subjectIdList.contains('TOTAL') || filter.subjectIdList.contains('ALL_TOTAL')">
+                '0' as realscore,
+                sum(score) AS score,
+            </if>
+            <if test="filter.subjectIdList != null and !filter.subjectIdList.contains('TOTAL') and !filter.subjectIdList.contains('ALL_TOTAL')">
+                '0' as realscore,
+                0 score,
+            </if>
+            sum(CASE WHEN (true <include refid="BaseMapper.filterSubject" />) THEN score ELSE 0 END) AS selected_score,
+            sum(fullscore) fullscore,
+            count(stuid) over(PARTITION BY examid) stu_count_in_grade
+            FROM stu_sbj_score_data
+            <where>
+                (classtype='1' <include refid="BaseMapper.filterSubject" />) OR
+                (true <include refid="BaseMapper.filterSubject" />)
+            </where>
+            GROUP BY examid, examname, stuid, stuname, stuno, sex, sexname, studentexamno
+        ),
+
+        stu_all_total_score_rank_stats AS (
+            SELECT examid, examname, classtype, classid, subjectid, stuid, stuname, stuno, sex, sexname, studentexamno,
+            '0' as realscore,
+            score,
+            fullscore,
+            stu_count_in_grade,
+            <include refid="BaseMapper.rank"/> (PARTITION BY classid, subjectid ORDER BY score DESC) AS stu_sbj_rank_in_class,
+            <include refid="BaseMapper.rank"/> (PARTITION BY subjectid ORDER BY score DESC, selected_score desc) AS stu_sbj_rank_in_grade
+            FROM stu_all_total_score_data
+            INNER JOIN class_stu_data USING(stuid)
+        ),
+
+        stu_all_total_score_rank_count_stats AS (
+            SELECT *, count(*) over(PARTITION BY stu_sbj_rank_in_grade) rank_count
+            FROM stu_all_total_score_rank_stats
+        ),
+
+        stu_all_total_score_rank_percent_stats AS (
+            SELECT *,
+            calc_percent(stu_sbj_rank_in_grade, rank_count, stu_count_in_grade) rank_percent,
+            score / fullscore * 100 score_percent
+            FROM stu_all_total_score_rank_count_stats
+        ),
+
+        percent_stats AS (
+            SELECT stsrs.*, total_stats.stu_sbj_rank_in_grade stu_total_rank_in_grade
+            FROM stu_total_score_rank_percent_stats stsrs
+            INNER JOIN stu_all_total_score_rank_percent_stats total_stats USING(examid, stuid)
+            UNION
+            SELECT *, stu_sbj_rank_in_grade stu_total_rank_in_grade
+            FROM stu_all_total_score_rank_percent_stats
+        ),
+
+        degree_stats AS (
+            SELECT *,
+
+            (CASE
+            <foreach collection="filter.zoneList" item="zone">
+                <if test="filter.more.type == 3">
+                    WHEN rank_percent &lt;= #{zone.lowScore}::NUMERIC then #{zone.degree}
+                </if>
+                <if test="filter.more.type == 4">
+                    WHEN score_percent >= #{zone.lowScore}::NUMERIC then #{zone.degree}
+                </if>
+            </foreach>
+            <if test="filter.more.type == 3">
+                WHEN rank_percent &lt;= 0 then null
+            </if>
+            <if test="filter.more.type == 4">
+                WHEN score_percent >= 0 then null
+            </if>
+            ELSE null
+            END) degree
+
+            FROM percent_stats
+        )
+    </sql>
+
+    <sql id="listFilter">
+        <where>
+            true
+            <include refid="BaseMapper.filterSubject" />
+            <if test="filter.studentTopCount != null and filter.studentTopCount > 0">
+                AND (stu_total_rank_in_grade <![CDATA[<=]]> #{filter.studentTopCount})
+            </if>
+            <if test="filter.sex != null and !filter.sex.isEmpty()">
+                AND sex=#{filter.sex}
+            </if>
+        </where>
+    </sql>
+
+    <select id="selectList" parameterType="java.util.Map"
+            resultType="com.tianwen.springcloud.microservice.score.entity.analysis.RankStats">
+        <include refid="listData" />
+        SELECT
+        examid AS exam_id,
+        examname AS exam_name,
+        classtype AS class_type,
+        classid AS class_id,
+        stuid AS student_id,
+        stuname AS student_name,
+        stuno AS student_no,
+        sex, sexname,
+        studentexamno AS student_exam_no,
+        subjectid AS subject_id,
+        realscore,
+        round(score, 2) AS score,
+        <if test="filter.more.inclusion == 0">
+        (CASE WHEN realscore='-1' THEN 0 ELSE stu_sbj_rank_in_class END) stu_rank_in_class,
+        (CASE WHEN realscore='-1' THEN 0 ELSE stu_sbj_rank_in_grade END) stu_rank_in_grade,
+        </if>
+        <if test="filter.more.inclusion != 0">
+        stu_sbj_rank_in_class AS stu_rank_in_class,
+        stu_sbj_rank_in_grade AS stu_rank_in_grade,
+        </if>
+        degree,
+
+        (CASE WHEN classid='TOTAL' THEN 1 ELSE 0 END) class_total,
+        (CASE WHEN subjectid='ALL_TOTAL' THEN 2 WHEN subjectid='TOTAL' THEN 1 ELSE 0 END) subject_total
+
+        FROM degree_stats
+
+        <include refid="listFilter" />
+
+        ORDER BY examid, stu_total_rank_in_grade, class_total, classid, stuid, subject_total, subjectid
+
+        <include refid="BaseMapper.sqlFragment_pagination" />
+    </select>
+
+    <select id="countList" parameterType="java.util.Map"
+            resultType="java.lang.Integer">
+        <include refid="listData" />
+        SELECT COUNT(*)
+        FROM degree_stats
+        <include refid="listFilter" />
+    </select>
+
+</mapper>

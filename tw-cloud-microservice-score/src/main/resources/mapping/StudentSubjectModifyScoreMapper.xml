@@ -1,0 +1,87 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!--
+
+       Copyright 2015-2016 the original author or authors.
+
+       Licensed under the Apache License, Version 2.0 (the "License");
+       you may not use this file except in compliance with the License.
+       You may obtain a copy of the License at
+
+          http://www.apache.org/licenses/LICENSE-2.0
+
+       Unless required by applicable law or agreed to in writing, software
+       distributed under the License is distributed on an "AS IS" BASIS,
+       WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+       See the License for the specific language governing permissions and
+       limitations under the License.
+
+-->
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.tianwen.springcloud.microservice.score.dao.StudentSubjectModifyScoreMapper">
+
+    <sql id="table">t_e_cj_stu_modify_score</sql>
+
+    <resultMap id="StudentSubjectModifyScore" type="com.tianwen.springcloud.microservice.score.entity.StudentSubjectModifyScore">
+        <result column="stumodifyscoreid" property="id" />
+        <result column="modifytag" property="modifyTag" />
+        <result column="stusubjectid" property="studentSubjectId" />
+        <result column="score" property="score" />
+        <result column="modifyscore" property="modifyScore" />
+        <result column="modifyreason" property="modifyReason" />
+        <result column="applicantid" property="applicantId" />
+        <result column="applicantname" property="applicantName" />
+        <result column="appltime" property="applTime" />
+        <result column="approverid" property="approverId" />
+        <result column="approvername" property="approverName" />
+        <result column="apprtime" property="apprTime" />
+        <result column="appview" property="appView" />
+        <result column="status" property="status" />
+        <result column="summary" property="summary" />
+        <result column="examid" property="examId" />
+        <result column="gradeid" property="gradeId" />
+        <result column="classid" property="classId" />
+        <result column="subjectid" property="subjectId" />
+        <result column="stuid" property="studentId"/>
+        <result column="classtype" property="classType" />
+        <association property="studentSubjectScore" resultMap="StudentSubjectScore" />
+    </resultMap>
+    <resultMap id="StudentSubjectScore" type="com.tianwen.springcloud.microservice.score.entity.StudentSubjectScore">
+        <result column="examid" property="examId" />
+        <result column="gradeid" property="gradeId" />
+        <result column="classid" property="classId" />
+        <result column="subjectid" property="subjectId" />
+        <result column="stuid" property="studentId"/>
+        <result column="stuname" property="studentName" />
+        <result column="stuno" property="studentNo" />
+        <result column="classtype" property="classType" />
+        <association property="exam" resultMap="com.tianwen.springcloud.microservice.score.dao.ExamMapper.JoinedExam" />
+    </resultMap>
+
+    <sql id="listFilter">
+        FROM <include refid="table" /> pt
+        INNER JOIN <include refid="com.tianwen.springcloud.microservice.score.dao.StudentSubjectScoreMapper.table" /> student_subject_score USING(examid, gradeid, classid, subjectid, stuid)
+        INNER JOIN <include refid="com.tianwen.springcloud.microservice.score.dao.ExamMapper.table" /> exam USING(examid)
+        <include refid="BaseMapper.joinExamGrade" />
+        <where>
+            true
+            <include refid="BaseMapper.sqlFragment_searchCriteria" />
+            AND eg.pubstatus = '2'
+        </where>
+    </sql>
+
+    <select id="selectList" parameterType="java.util.Map"
+            resultMap="StudentSubjectModifyScore">
+        SELECT pt.*, student_subject_score.stuname, student_subject_score.stuno, exam.examname
+        <include refid="listFilter" />
+        ORDER BY apprtime DESC
+        <include refid="BaseMapper.sqlFragment_pagination" />
+    </select>
+
+    <select id="countList" parameterType="java.util.Map"
+            resultType="java.lang.Integer">
+        SELECT COUNT(*)
+        <include refid="listFilter" />
+    </select>
+</mapper>
